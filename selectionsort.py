@@ -7,7 +7,7 @@ class Entry():
         return f"Entry(start={self.start}, end={self.end})"
 
 def selection_sort(arr):
-    temp = 6
+    temp = len(arr)
     output_list = []
     # Traverse through all elements in the array
     for i in range(len(arr)):

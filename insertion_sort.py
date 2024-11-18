@@ -6,7 +6,7 @@ class Entry():
         return f"Entry(start={self.start}, end={self.end})"
 
 def insertion_sort(arr):
-    temp = 6
+    temp = len(arr)
     output_list = []
     for i in range(1, len(arr)):
         key = arr[i]  # element to be placed correctly
@@ -20,6 +20,5 @@ def insertion_sort(arr):
        
         arr[j + 1] = key  # Place key after the last moved element
         output_list.append(Entry(temp, j+1))
-        # print('new', j+1)
     return output_list
 print(insertion_sort([5,4,3,2,1]))
