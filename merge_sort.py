@@ -81,7 +81,7 @@ def merge(left, right, movements):
 # Example usage
 if __name__ == "__main__":
     movements =[]
-    array = [38,7,1]
+    array = [78, 39, 27,144,3,9,1,0]
     array2 = [(array[i], i) for i in range(len(array))]
     print("Original array:", array)
     sorted_array = merge_sort(array2, movements)
@@ -99,4 +99,3 @@ if __name__ == "__main__":
     sorted_movements = sorted(sorted_movements, key=lambda x: (x.level, x.end))
 
     print(sorted_movements)
-    print(len(sorted_movements))
