@@ -49,10 +49,9 @@ def selection_sort(arr):
     return output_list
 
 def sweep(request, compute_ik, x, y, z):
-    print("enetered sweep")
-    request.ik_request.pose_stamped.pose.position.x = 0.918 - 0.1 # x
-    request.ik_request.pose_stamped.pose.position.y = 0.159 # y
-    request.ik_request.pose_stamped.pose.position.z = 0.460 # z 
+    request.ik_request.pose_stamped.pose.position.x = x
+    request.ik_request.pose_stamped.pose.position.y = y
+    request.ik_request.pose_stamped.pose.position.z = z 
 
     # facing down : 1.5 0 -0.5 1.7 from custom_sawyer_tuck.launch  
     request.ik_request.pose_stamped.pose.orientation.x = -0.016
@@ -60,17 +59,23 @@ def sweep(request, compute_ik, x, y, z):
     request.ik_request.pose_stamped.pose.orientation.z = -0.018
     request.ik_request.pose_stamped.pose.orientation.w = 0.707
 
-    print(request)
+    # print(request)
 
     response = compute_ik(request)
-    print(response)
+    # print(response)
 
     group = MoveGroupCommander("right_arm")
     group.set_pose_target(request.ik_request.pose_stamped)
+    group.set_max_velocity_scaling_factor(0.5)
     plan = group.plan()
     group.execute(plan[1])
-    print("exit sweep")
     rospy.sleep(1)
+
+    #TODO: linear trajectory for sweep
+    #TODO: tune the final orientation so that the ar tags show up in rviz
+    #TODO: make it faster similar to how we did in move
+
+
 
 def move(request, compute_ik, x,y,z, close):
     right_gripper = robot_gripper.Gripper('right_gripper')
@@ -109,83 +114,26 @@ def move(request, compute_ik, x,y,z, close):
         right_gripper.close()
     rospy.sleep(1)
 
-##CHANGES FOR LINEAR TRAJECTOR
-
-# def get_trajectory(limb, kin, ik_solver, tag_pos, ar_num):
-#     """
-#     Returns an appropriate robot trajectory for the specified task.  You should 
-#     be implementing the path functions in paths.py and call them here
-    
-#     Parameters
-#     ----------
-#     task : string
-#         name of the task.  Options: line, circle, square
-#     tag_pos : 3x' :obj:`numpy.ndarray`
-        
-#     Returns
-#     -------
-#     :obj:`moveit_msgs.msg.RobotTrajectory`
-#     """
-
-#     tfBuffer = tf2_ros.Buffer()
-#     listener = tf2_ros.TransformListener(tfBuffer)
-
-#     try:
-#         trans = tfBuffer.lookup_transform('base', 'right_hand', rospy.Time(0), rospy.Duration(10.0))
-#     except Exception as e:
-#         print(e)
-
-#     current_position = np.array([getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')])
-
-#     target_pos = tag_pos[0]
-#     target_pos[2] += 0.4 #linear path moves to a Z position above AR Tag.
-#     print("TARGET POSITION:", target_pos)
-#     trajectory = LinearTrajectory(start_position=current_position, goal_position=target_pos, total_time=5)
-
-#     path = MotionPath(limb, kin, ik_solver, trajectory)
-#     return path.to_robot_trajectory(ar_num, True)
-
 
 def main():
     # Wait for the IK service to become available
 
-    number_ar_tags = 4
+    number_of_blocks = 7 #change this value every time change number of blocks
+    temp_ar_tag_index = number_of_blocks
 
-    ar_tags = [i for i in range(number_ar_tags)]
+    ar_tags_to_sort = [i for i in range(number_of_blocks)]
     rospy.wait_for_service('compute_ik')
 
     rospy.init_node('service_query')
-    
-###CHANGES FOR LINEAR TRAJECTORY
-    # # this is used for sending commands (velocity, torque, etc) to the robot
-    # ik_solver = IK("base", "right_gripper_tip")
-    # limb = intera_interface.Limb("right")
-    # kin = sawyer_kinematics("right")
-####
 
     # Create the function used to call the service
     compute_ik = rospy.ServiceProxy('compute_ik', GetPositionIK)
     while not rospy.is_shutdown():
         right_gripper = robot_gripper.Gripper('right_gripper')
         right_gripper.open()
-        
-        # Set the desired orientation for the end effector HERE
-        # Calibrate the gripper (other commands won't work unless you do this first)
-       # print('Calibrating...')
-        #right_gripper.calibrate()
-        #rospy.sleep(2.0)
-
-        # Close the right gripper
-        #print('Closing...')
-        #right_gripper.close()
-        #rospy.sleep(1.0)
-
-        # Open the right gripper
-        #print('Opening...')
-        #right_gripper.open()
-        input('Press [ Enter ]: ')
-        pos_list = []
-        pos_dict = {}
+        input('Starting sort - Press [ Enter ]: ')
+        pos_list = [] #list of ar tag coordinates (x, y, z)
+        position_to_index = {} #dictionary of position (x,y,z) -> ar tag index (currently 0 -> 3)
         tfBuffer = tf2_ros.Buffer()
         tfListener = tf2_ros.TransformListener(tfBuffer)
 
@@ -193,80 +141,94 @@ def main():
         request = GetPositionIKRequest()
         request.ik_request.group_name = "right_arm"
 
-    ######CHANGES FOR LINEAR TRAJECTORY
-
-        # robot_trajectory = get_trajectory(limb, kin, ik_solver, tag_pos, number_ar_tags)
-        # planner = PathPlanner('right_arm')
-
-        # pub = rospy.Publisher('move_group/display_planned_path', DisplayTrajectory, queue_size=10)
-        # disp_traj = DisplayTrajectory()
-        # disp_traj.trajectory.append(robot_trajectory)
-        # disp_traj.trajectory_start = RobotState()
-        # pub.publish(disp_traj)
-
-    ######
         # If a Sawyer does not have a gripper, replace '_gripper_tip' with '_wrist' instead
         link = "right_gripper_tip"
 
         request.ik_request.ik_link_name = link
         request.ik_request.pose_stamped.header.frame_id = "base"
 
-        # move over a little bit, check if new ar tags have been seen, repeat until all ar tags have been located
-        while True: 
-            # sweep(request, compute_ik, 
-            #       x=0.958,
-            #       y=0,
-            #       z=0.0) 
-            for tag in ar_tags:
-                if tag not in pos_dict.values():
-                    try:
-                        trans = tfBuffer.lookup_transform("base", f"ar_marker_{tag}", rospy.Time(0), rospy.Duration(10.0))
-                        tag_pos = [getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')]
-                        pos_list.append(tuple(tag_pos))
-                        pos_dict[tuple(tag_pos)] = tag
-                    except Exception as e:
-                        print(e)
-                        print("Retrying ...")
+        for tag in ar_tags_to_sort:
+            if tag not in position_to_index.values():
+                try:
+                    trans = tfBuffer.lookup_transform("base", f"ar_marker_{tag}", rospy.Time(0), rospy.Duration(10.0))
+                    tag_pos = [getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')]
+                    pos_list.append(tuple(tag_pos))
+                    position_to_index[tuple(tag_pos)] = tag
+                except Exception as e:
+                    print(e)
+                    print("Retrying ...")
 
-            input(f'current pos_dict: {pos_dict} \nPress [ Enter ]')
+        assert(len(pos_list) > 0) 
+        if len(position_to_index.values()) != number_of_blocks:
+            # move to a found ar tag -> sweep!
+            print("Sweeping since missing ar tags")
+            sweep(request, compute_ik, pos_list[0][0], pos_list[0][1], 0)
+            # move(request, compute_ik, pos_list[0][0], pos_list[0][1], 0, 2) # move to an arbitrary ar tag TODO: maybe don't have it be arbitrary
+            epsilon = 0.0
+            while len(position_to_index.values()) != number_of_blocks: 
+                epsilon += 0.1
+                print("Performing sweep in direction 1")
+                sweep(request, compute_ik, pos_list[0][0], pos_list[0][1] + epsilon, 0.4)
+                for tag in ar_tags_to_sort:
+                    if tag not in position_to_index.values():
+                        try:
+                            trans = tfBuffer.lookup_transform("base", f"ar_marker_{tag}", rospy.Time(0), rospy.Duration(10.0))
+                            tag_pos = [getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')]
+                            pos_list.append(tuple(tag_pos))
+                            position_to_index[tuple(tag_pos)] = tag
+                        except Exception as e:
+                            print(e)
+                            print("Retrying ...")
+                print("Performing sweep in direction 2")
+                sweep(request, compute_ik, pos_list[0][0], pos_list[0][1] - epsilon, 0.4)
+                for tag in ar_tags_to_sort:
+                    if tag not in position_to_index.values():
+                        try:
+                            trans = tfBuffer.lookup_transform("base", f"ar_marker_{tag}", rospy.Time(0), rospy.Duration(10.0))
+                            tag_pos = [getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')]
+                            pos_list.append(tuple(tag_pos))
+                            position_to_index[tuple(tag_pos)] = tag
+                        except Exception as e:
+                            print(e)
+                            print("Retrying ...")
 
-            if len(pos_dict.values()) == number_ar_tags:
-                break
+                input(f'Continue sweeping / done sweeping - Press [ Enter ]')
+
 
         
-        print('unsorted pos_list')
-        for pos in pos_list: print(pos_dict[pos])
+        # print('unsorted pos_list')
+        # for pos in pos_list: print(pos_dict[pos])
         pos_list.sort(key=lambda triple: triple[1]) # sort by y-value instead of x-value since that corresponds to location in base_frame
-        print("sorted position list is ")
-        for pos in pos_list: print(pos_dict[pos])
-        print("position dict is ", pos_dict)
+        # print("sorted position list is ")
+        # for pos in pos_list: print(pos_dict[pos])
+        # print("position dict is ", pos_dict)
         initial_value_order = []
-        ind_dct = {}
+        index_to_position = {} #reversed pos dict index -> xyz
         for pos in pos_list:
-            ind_dct[len(initial_value_order)] = pos
-            initial_value_order.append(pos_dict[pos])
+            index_to_position[len(initial_value_order)] = pos
+            initial_value_order.append(position_to_index[pos])
         #print(initial_value_order)
-        trans = tfBuffer.lookup_transform("base", "ar_marker_4", rospy.Time(0), rospy.Duration(10.0))
+        trans = tfBuffer.lookup_transform("base", f"ar_marker_{temp_ar_tag_index}", rospy.Time(0), rospy.Duration(10.0))
         temp_pos = [getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')]
-        ind_dct[len(initial_value_order)] = tuple(temp_pos)
+        index_to_position[temp_ar_tag_index] = tuple(temp_pos)
         print("initial value order", initial_value_order)
-        l = selection_sort(initial_value_order)
-        print("list after selection sort ", l)
-        print("ind dictionary", ind_dct)
-        input()
+        selection_sort_visualization = selection_sort(initial_value_order)
+        print("list after selection sort ", selection_sort_visualization)
+        print("ind dictionary", index_to_position)
+        input("Start moving! Press [ Enter ]")
         
-        for entry in l:
+        for entry in selection_sort_visualization:
             try:
                 print("entry is ", entry)
-                input('Press [ Enter ]')
+                input('Move to next block - Press [ Enter ]')
                 print(f'picking up from {entry.start}')
-                move(request, compute_ik, ind_dct[entry.start][0], ind_dct[entry.start][1], 0, 2)
-                move(request, compute_ik, ind_dct[entry.start][0], ind_dct[entry.start][1], -.15, 1) # 1 means close
-                move(request, compute_ik, ind_dct[entry.start][0], ind_dct[entry.start][1], 0, 2)
+                move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], 0, 2)
+                move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], -.15, 1) # 1 means close
+                move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], 0, 2)
                 print(f'placing at {entry.end}')
-                move(request, compute_ik, ind_dct[entry.end][0], ind_dct[entry.end][1], 0, 2)
-                move(request, compute_ik, ind_dct[entry.end][0], ind_dct[entry.end][1], -.15, 0) # 0 means open
-                move(request, compute_ik, ind_dct[entry.end][0], ind_dct[entry.end][1], 0, 2)
+                move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], 0, 2)
+                move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], -.15, 0) # 0 means open
+                move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], 0, 2)
                 
                 
             except rospy.ServiceException as e:
