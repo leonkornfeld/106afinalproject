@@ -228,37 +228,44 @@ def main():
                         print(e)
                         print("Retrying ...")
 
-            input(f'current pos_dict: {pos_dict} \n[ Press Enter ]')
+            input(f'current pos_dict: {pos_dict} \nPress [ Enter ]')
 
             if len(pos_dict.values()) == number_ar_tags:
                 break
+
         
-        pos_list.sort()
-        print(pos_list)
-        print(pos_dict)
+        print('unsorted pos_list')
+        for pos in pos_list: print(pos_dict[pos])
+        pos_list.sort(key=lambda triple: triple[1]) # sort by y-value instead of x-value since that corresponds to location in base_frame
+        print("sorted position list is ")
+        for pos in pos_list: print(pos_dict[pos])
+        print("position dict is ", pos_dict)
         initial_value_order = []
         ind_dct = {}
         for pos in pos_list:
             ind_dct[len(initial_value_order)] = pos
             initial_value_order.append(pos_dict[pos])
         #print(initial_value_order)
-        trans = tfBuffer.lookup_transform("base", "ar_marker_0", rospy.Time(0), rospy.Duration(10.0))
+        trans = tfBuffer.lookup_transform("base", "ar_marker_4", rospy.Time(0), rospy.Duration(10.0))
         temp_pos = [getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')]
         ind_dct[len(initial_value_order)] = tuple(temp_pos)
+        print("initial value order", initial_value_order)
         l = selection_sort(initial_value_order)
-        print(l)
-        print(ind_dct)
+        print("list after selection sort ", l)
+        print("ind dictionary", ind_dct)
         input()
         
         for entry in l:
             try:
-                print(entry)
-                input()
+                print("entry is ", entry)
+                input('Press [ Enter ]')
+                print(f'picking up from {entry.start}')
                 move(request, compute_ik, ind_dct[entry.start][0], ind_dct[entry.start][1], 0, 2)
-                move(request, compute_ik, ind_dct[entry.start][0], ind_dct[entry.start][1], -.15, 1)
+                move(request, compute_ik, ind_dct[entry.start][0], ind_dct[entry.start][1], -.15, 1) # 1 means close
                 move(request, compute_ik, ind_dct[entry.start][0], ind_dct[entry.start][1], 0, 2)
+                print(f'placing at {entry.end}')
                 move(request, compute_ik, ind_dct[entry.end][0], ind_dct[entry.end][1], 0, 2)
-                move(request, compute_ik, ind_dct[entry.end][0], ind_dct[entry.end][1], -.15, 0)
+                move(request, compute_ik, ind_dct[entry.end][0], ind_dct[entry.end][1], -.15, 0) # 0 means open
                 move(request, compute_ik, ind_dct[entry.end][0], ind_dct[entry.end][1], 0, 2)
                 
                 
