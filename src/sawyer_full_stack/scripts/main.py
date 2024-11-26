@@ -9,14 +9,14 @@ import numpy as np
 import rospkg
 import roslaunch
 
-from paths.trajectories import LinearTrajectory, CircularTrajectory
-from paths.paths import MotionPath
-from paths.path_planner import PathPlanner
-from controllers.controllers import ( 
+from src.paths.trajectories import LinearTrajectory, CircularTrajectory
+from src.paths.paths import MotionPath
+from src.paths.path_planner import PathPlanner
+from src.controllers.controllers import ( 
     PIDJointVelocityController, 
     FeedforwardJointVelocityController
 )
-from utils.utils import *
+from src.utils.utils import *
 
 from trac_ik_python.trac_ik import IK
 
