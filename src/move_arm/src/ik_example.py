@@ -9,7 +9,6 @@ import sys
 from intera_interface import gripper as robot_gripper
 import tf2_ros
 
-# ## CHANGES FOR LINEAR TRAJECTORY
 from paths.trajectories import LinearTrajectory # pyright: ignore
 from paths.paths import MotionPath # pyright: ignore
 from paths.path_planner import PathPlanner # pyright: ignore
@@ -54,7 +53,6 @@ def insertion_sort(arr):
     output_list = []
     for i in range(1, len(arr)):
         key = arr[i]  # element to be placed correctly
-        # print(key)
         j = i - 1
         output_list.append(Entry(j + 1, temp))
         while j >= 0 and arr[j] > key:
