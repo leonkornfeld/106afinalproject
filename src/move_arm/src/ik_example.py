@@ -55,13 +55,18 @@ def insertion_sort(arr):
         key = arr[i]  # element to be placed correctly
         j = i - 1
         output_list.append(Entry(j + 1, temp))
+        flag = False
         while j >= 0 and arr[j] > key:
+            flag = True
             output_list.append(Entry(j,j+1))
             arr[j + 1] = arr[j]
             j -= 1
-       
+
         arr[j + 1] = key  # Place key after the last moved element
-        output_list.append(Entry(temp, j+1))
+        if flag:
+            output_list.append(Entry(temp, j+1))
+        else:
+            output_list.pop()
     return output_list
 
 def sweep(request, compute_ik, x, y, z):
