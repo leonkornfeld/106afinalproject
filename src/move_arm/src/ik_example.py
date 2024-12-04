@@ -21,7 +21,7 @@ from sawyer_pykdl import sawyer_kinematics # pyright: ignore
 
 print('Done!')
 
-
+index_to_position = {} #reversed pos dict index -> xyz
 
 class Entry():
     def __init__(self, start, end):
@@ -91,26 +91,28 @@ def sweep(request, compute_ik, x, y, z):
     #TODO: tune the final orientation so that the ar tags show up in rviz
     #TODO: make it faster similar to how we did in move
 
-def get_trajectory(limb, kin, ik_solver, target_pos, num_waypoints=50):
+def get_trajectory(limb, kin, ik_solver, target_pos, num_waypoints=1):
     num_way = num_waypoints
     
     tfBuffer = tf2_ros.Buffer()
     listener = tf2_ros.TransformListener(tfBuffer)
 
     try:
-        trans = tfBuffer.lookup_transform('base', 'right_hand', rospy.Time(0), rospy.Duration(10.0))
+        trans = tfBuffer.lookup_transform('base', 'right_hand', rospy.Time(0), rospy.Duration(1.0))
     except Exception as e:
         print(e)
 
     current_pos = np.array([getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')])
+    # index_to_position[ind] = tuple(current_pos)
 
-    trajectory = LinearTrajectory(start_position=current_pos, goal_position=target_pos, total_time=9)
+
+    trajectory = LinearTrajectory(start_position=current_pos, goal_position=target_pos, total_time=2)
 
     path = MotionPath(limb, kin, ik_solver, trajectory)
     
     return path.to_robot_trajectory(num_way, True)
 
-def linear_trajectory_move(x, y, z, close=None):
+def linear_trajectory_move(ind, x, y, z, close=None):
     ik_solver = IK("base", "right_gripper_tip")
     limb = intera_interface.Limb("right")
     kin = sawyer_kinematics("right")
@@ -120,18 +122,40 @@ def linear_trajectory_move(x, y, z, close=None):
     robot_trajectory = get_trajectory(limb, kin, ik_solver, target_pos)
 
     planner = PathPlanner('right_arm')
-    plan = planner.plan_to_joint_pos(robot_trajectory.joint_trajectory.points[0].positions)
-    planner.execute_plan(plan[1])
-
-    planner.execute_plan(robot_trajectory)
-
+    previous = np.array([10,10,10,10,10,10,10])
+    for i in range(len(robot_trajectory.joint_trajectory.points)):
+        if np.linalg.norm(previous - robot_trajectory.joint_trajectory.points[i].positions) < .6:
+            continue
+        print(robot_trajectory.joint_trajectory.points[i])
+        # input()
+        plan = planner.plan_to_joint_pos(robot_trajectory.joint_trajectory.points[i].positions)
+        previous = robot_trajectory.joint_trajectory.points[i].positions
+        # import pdb;
+        # pdb.set_trace()
+        import time
+        t = time.time()
+        planner.execute_plan(plan[1])
+        l = time.time()
+        print('f', l-t)
+   # planner.execute_plan(robot_trajectory)
+    #print('s',time.time()-l)
 
     right_gripper = robot_gripper.Gripper('right_gripper')
     if close == 'open':
         right_gripper.open()
     elif close == 'close':
         right_gripper.close()
-    rospy.sleep(1)
+    # rospy.sleep(.05)
+    # tfBuffer = tf2_ros.Buffer()
+    # listener = tf2_ros.TransformListener(tfBuffer)
+
+    # try:
+    #     trans = tfBuffer.lookup_transform('base', 'right_hand', rospy.Time(0), rospy.Duration(1.0))
+    # except Exception as e:
+    #     print(e)
+
+    # current_pos = tuple([getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')])
+
 
 
 def move(request, compute_ik, x, y, z, close):
@@ -244,7 +268,7 @@ def main():
         # for pos in pos_list: print(pos_dict[pos])
         # print("position dict is ", pos_dict)
         initial_value_order = []
-        index_to_position = {} #reversed pos dict index -> xyz
+       
         for pos in pos_list:
             index_to_position[len(initial_value_order)] = pos
             initial_value_order.append(position_to_index[pos])
@@ -265,26 +289,26 @@ def main():
         for entry in selection_sort_visualization:
             try:
                 print("entry is ", entry)
-                input('Move to next block - Press [ Enter ]')
+                print('Move to next block - Press [ Enter ]')
                 print(f'picking up from {entry.start}')
 
                 # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], 0, 2)
                 # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], -.15, 1) # 1 means close
                 # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], 0, 2)
-                input('go above')
-                linear_trajectory_move(index_to_position[entry.start][0], index_to_position[entry.start][1], 0.4)
-                input('go down')
-                linear_trajectory_move(index_to_position[entry.start][0], index_to_position[entry.start][1], -0.05, 'close')
-                input('go back up')
-                linear_trajectory_move(index_to_position[entry.start][0], index_to_position[entry.start][1], 0.4)
+                print('go above')
+                linear_trajectory_move(entry.start, index_to_position[entry.start][0], index_to_position[entry.start][1], .2)
+                print('go down')
+                linear_trajectory_move(entry.start, index_to_position[entry.start][0], index_to_position[entry.start][1], -.025, 'close')
+                print('go back up')
+                linear_trajectory_move(entry.start, index_to_position[entry.start][0], index_to_position[entry.start][1], .2)
 
                 print(f'placing at {entry.end}')
                 # move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], 0, 2)
                 # move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], -.15, 0) # 0 means open
                 # move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], 0, 2)
-                linear_trajectory_move(index_to_position[entry.end][0], index_to_position[entry.end][1], 0.4)
-                linear_trajectory_move(index_to_position[entry.end][0], index_to_position[entry.end][1], -0.05, 'open')
-                linear_trajectory_move(index_to_position[entry.end][0], index_to_position[entry.end][1], 0.4)
+                linear_trajectory_move(entry.end, index_to_position[entry.end][0], index_to_position[entry.end][1], 0.2)
+                linear_trajectory_move(entry.end, index_to_position[entry.end][0], index_to_position[entry.end][1], -.025, 'open')
+                linear_trajectory_move(entry.end, index_to_position[entry.end][0], index_to_position[entry.end][1], 0.2)
                 
                 
             except rospy.ServiceException as e:

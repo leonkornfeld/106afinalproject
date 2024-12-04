@@ -158,6 +158,7 @@ class LinearTrajectory(Trajectory):
         self.distance = self.goal_position - self.start_position
         self.acceleration = (self.distance * 4.0) / (self.total_time ** 2) # keep constant magnitude acceleration
         self.v_max = (self.total_time / 2.0) * self.acceleration # maximum velocity magnitude
+        print(self.v_max)
         self.desired_orientation = np.array([0, 1, 0, 0])
 
     def target_pose(self, time):
