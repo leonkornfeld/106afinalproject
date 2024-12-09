@@ -179,14 +179,10 @@ def get_trajectory(limb, kin, ik_solver, target_pos, num_waypoints=2):
         print(e)
 
     current_pos = np.array([getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')])
-    # index_to_position[ind] = tuple(current_pos)
-
 
     trajectory = LinearTrajectory(start_position=current_pos, goal_position=target_pos, total_time=2)
 
     path = MotionPath(limb, kin, ik_solver, trajectory)
-
-    # print("HELLLO", path.to_robot_trajectory(num_way, True))
     
     return path.to_robot_trajectory(num_way, True)
 
@@ -202,80 +198,24 @@ def linear_trajectory_move(ind, x, y, z, close=None):
     planner = PathPlanner('right_arm')
     previous = np.array([10,10,10,10,10,10,10])
     for i in range(len(robot_trajectory.joint_trajectory.points)):
-        ##THIS GUY IS A PROBLEM (ignores z podition in first down motion somtimes) so changed from .6 to .1
+        ##THIS GUY IS A PROBLEM (ignores z position in first down motion somtimes) so changed from .6 to .1
         if np.linalg.norm(previous - robot_trajectory.joint_trajectory.points[i].positions) < .1:
             continue
-        # print(robot_trajectory.joint_trajectory.points[i])
-        # input()
         plan = planner.plan_to_joint_pos(robot_trajectory.joint_trajectory.points[i].positions)
         previous = robot_trajectory.joint_trajectory.points[i].positions
-        # import pdb;
-        # pdb.set_trace()
+
         import time
         t = time.time()
         print("before execute plan")
         planner.execute_plan(plan[1])
         l = time.time()
         print('f', l-t)
-   # planner.execute_plan(robot_trajectory)
-    #print('s',time.time()-l)
-    
-    return
 
     right_gripper = robot_gripper.Gripper('right_gripper')
     if close == 'open':
         right_gripper.open()
     elif close == 'close':
         right_gripper.close()
-    # rospy.sleep(.05)
-    # tfBuffer = tf2_ros.Buffer()
-    # listener = tf2_ros.TransformListener(tfBuffer)
-
-    # try:
-    #     trans = tfBuffer.lookup_transform('base', 'right_hand', rospy.Time(0), rospy.Duration(1.0))
-    # except Exception as e:
-    #     print(e)
-
-    # current_pos = tuple([getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')])
-
-
-
-def move(request, compute_ik, x, y, z, close):
-    right_gripper = robot_gripper.Gripper('right_gripper')
-    request.ik_request.pose_stamped.pose.position.x = x
-    request.ik_request.pose_stamped.pose.position.y = y
-    request.ik_request.pose_stamped.pose.position.z = z      
-    # -0.008, 0.632, -0.101, 0.768
-    request.ik_request.pose_stamped.pose.orientation.x = 0.0
-    request.ik_request.pose_stamped.pose.orientation.y = 1.0
-    request.ik_request.pose_stamped.pose.orientation.z = 0.0
-    request.ik_request.pose_stamped.pose.orientation.w = 0.0
-    
-    # Send the request to the service
-    response = compute_ik(request)
-    
-    # Print the response HERE
-    # print(response)
-    group = MoveGroupCommander("right_arm")
-
-    # Setting position and orientation target
-    group.set_pose_target(request.ik_request.pose_stamped)
-    group.set_max_velocity_scaling_factor(.5)
-
-    # TRY THIS
-    # Setting just the position without specifying the orientation
-    ###group.set_position_target([0.5, 0.5, 0.0])
-
-    # Plan IK
-    plan = group.plan()
-    #user_input = input("Enter 'y' if the trajectory looks safe on RVIZ")
-    
-    group.execute(plan[1])
-    if close == 0:
-        right_gripper.open()
-    elif close == 1:
-        right_gripper.close()
-    rospy.sleep(1)
 
 
 def main():
@@ -294,8 +234,8 @@ def main():
     # Create the function used to call the service
     compute_ik = rospy.ServiceProxy('compute_ik', GetPositionIK)
     while not rospy.is_shutdown():
-        # right_gripper = robot_gripper.Gripper('right_gripper')
-        # right_gripper.open()
+        right_gripper = robot_gripper.Gripper('right_gripper')
+        right_gripper.open()
         input('Starting sort - Press [ Enter ]: ')
         pos_list = [] # list of ar tag coordinates (x, y, z)
         position_to_index = {} # dictionary of position (x,y,z) -> ar tag index (currently 0 -> 3)
@@ -358,7 +298,6 @@ def main():
         for pos in pos_list:
             index_to_position[len(initial_value_order)] = pos
             initial_value_order.append(position_to_index[pos])
-        # print(initial_value_order)
 
         color_to_ar = {initial_color_id : ar_id for initial_color_id, ar_id in zip(color_order, initial_value_order)}
         color_to_ar[temp_ar_tag_index] = temp_ar_tag_index
@@ -381,9 +320,6 @@ def main():
                 print('Move to next block - Press [ Enter ]')
                 print(f'picking up from {entry.start}')
 
-                # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], 0, 2)
-                # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], -.15, 1) # 1 means close
-                # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], 0, 2)
                 print('go above')
                 linear_trajectory_move(entry.start, index_to_position[color_to_ar[entry.start]][0], index_to_position[color_to_ar[entry.start]][1], .2)
                 print('go down')
@@ -392,9 +328,7 @@ def main():
                 linear_trajectory_move(entry.start, index_to_position[color_to_ar[entry.start]][0], index_to_position[color_to_ar[entry.start]][1], .2)
 
                 print(f'placing at {entry.end}')
-                # move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], 0, 2)
-                # move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], -.15, 0) # 0 means open
-                # move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], 0, 2)
+
                 linear_trajectory_move(entry.end, index_to_position[color_to_ar[entry.end]][0], index_to_position[color_to_ar[entry.end]][1], 0.2)
                 print("NOW")
                 linear_trajectory_move(entry.end, index_to_position[color_to_ar[entry.end]][0], index_to_position[color_to_ar[entry.end]][1], -.025, 'open')
@@ -407,4 +341,25 @@ def main():
 # Python's syntax for a main() method
 if __name__ == '__main__':
     main()
+
+    #TODO: fix so that it calls main
+    movements =[]
+    array = [78, 39, 27,144,3,9,1,0]
+    array2 = [(array[i], i) for i in range(len(array))]
+    print("Original array:", array)
+    sorted_array = merge_sort(array2, movements)
+    print("Sorted array:", sorted_array)
+    # print(movements)
+    sorted_movements = sorted(movements, key=lambda x: x.level)
+    temp = set([i for i in range(len(array))])
+    for movement in sorted_movements:
+        if movement.level != 0:
+            break
+        if movement.start in temp:
+            temp.remove(movement.start)
+    for num in temp:
+        sorted_movements.append(Entry(num,num, 0))    
+    sorted_movements = sorted(sorted_movements, key=lambda x: (x.level, x.end))
+
+    print(sorted_movements)
 
