@@ -427,7 +427,6 @@ class PIDJointVelocityController(Controller):
         self.Kw = Kw
         
         self.integ_error = np.zeros(7)
-        self.prev =  np.zeros(7)
         
         self.is_joinstpace_controller = True
 
@@ -446,15 +445,31 @@ class PIDJointVelocityController(Controller):
         target_velocity: 7x' :obj:`numpy.ndarray` of desired velocities
         target_acceleration: 7x' :obj:`numpy.ndarray` of desired accelerations
         """
+        #curr joint states
         current_position = get_joint_positions(self._limb)
         current_velocity = get_joint_velocities(self._limb)
         
         # TODO: implement PID control to set the joint velocities. 
-        
-        e = target_position - current_position
-        e_dot = e - self.prev
-        self.prev = e
-        integral_e = self.Ki @ (self.Kw @ self.integ_error + e)
-        controller_velocity = target_velocity + self.Kp@e + integral_e + self.Kd@ e_dot
-        self.integ_error = integral_e
+        #position error 
+        position_error = target_position - current_position
+        #vel error 
+        velocity_error = target_velocity - current_velocity 
+
+        #update integral of errors 
+        self.integ_error = self.Kw*self.integ_error + position_error 
+
+        #proportional control 
+        Pout = self.Kp @ position_error 
+
+        #integral control 
+        Iout = self.Ki @ self.integ_error 
+
+        #derivative control 
+        Dout = self.Kd @ velocity_error 
+
+        #PID_Control output 
+
+
+        controller_velocity = target_velocity + Pout + Iout + Dout 
+
         self._limb.set_joint_velocities(joint_array_to_dict(controller_velocity, self._limb))

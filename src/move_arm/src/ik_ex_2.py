@@ -16,7 +16,6 @@ import intera_interface
 from trac_ik_python.trac_ik import IK
 from moveit_msgs.msg import DisplayTrajectory, RobotState
 from sawyer_pykdl import sawyer_kinematics # pyright: ignore
-from controllers.controllers import PIDJointVelocityController
 
 
 
@@ -70,77 +69,6 @@ def insertion_sort(arr):
             output_list.pop()
     return output_list
 
-def merge_sort(arr, movements):
-    """
-    Perform merge sort on a list.
-    
-    :param arr: List of elements to be sorted
-    :return: Sorted list
-    """
-    if len(arr) <= 1:
-        print(arr)
-        # movements.append(Entry(arr[0][1],arr[0][1]))
-        return arr
-
-    # Split the array into two halves
-    mid = len(arr) // 2
-    left_half = arr[:mid]
-    right_half = arr[mid:]
-
-    # Recursively sort both halves
-    left_sorted = merge_sort(left_half, movements)
-    right_sorted = merge_sort(right_half, movements)
-
-    # Merge the sorted halves
-    return merge(left_sorted, right_sorted, movements)
-
-def merge(left, right, movements):
-    """
-    Merge two sorted lists into a single sorted list.
-    
-    :param left: First sorted list
-    :param right: Second sorted list
-    :return: Merged sorted list
-    """
-    merged = []
-    left_index = right_index = 0
-
-    # Merge while there are elements in both lists
-    next = min(left[0][1], right[0][1])
-    while left_index < len(left) and right_index < len(right):
-        if left[left_index][0] < right[right_index][0]:
-            # if next != left[left_index][1]:
-            movements.append(Entry(left[left_index][1],next, math.ceil(math.log2((len(right))))))
-            merged.append((left[left_index][0], next))
-            left_index += 1
-
-        else:
-            # if next != right[right_index][1]:
-            movements.append(Entry(right[right_index][1],next, math.ceil(math.log2((len(right))))))
-            merged.append((right[right_index][0], next))
-            right_index += 1
-        next+=1
-    
-
-    # Add remaining elements from left and right
-    if left_index == len(left):
-        while right_index < len(right):
-            # if next != right[right_index][1]:
-            movements.append(Entry(right[right_index][1],next, math.ceil(math.log2((len(right))))))
-            merged.append((right[right_index][0], next))
-            right_index+=1
-            next+=1
-    elif right_index == len(right):
-        while left_index < len(left):
-            merged.append((left[left_index][0], next))
-            # if next != left[left_index][1]:
-            movements.append(Entry(left[left_index][1], next, math.ceil(math.log2((len(right))))))
-            left_index+=1
-            next+=1    
-    # movements.append(Entry("split","split"))
-    print(merged)
-    return merged
-
 def sweep(request, compute_ik, x, y, z):
     request.ik_request.pose_stamped.pose.position.x = x
     request.ik_request.pose_stamped.pose.position.y = y
@@ -154,6 +82,13 @@ def sweep(request, compute_ik, x, y, z):
 
     # print(request)
 
+    response = compute_ik(request)
+    # print(response)
+
+    group = MoveGroupCommander("right_arm")
+    group.set_pose_target(request.ik_request.pose_stamped)
+    group.set_max_velocity_scaling_factor(0.5)
+    plan = group.plan()
     group.execute(plan[1])
     rospy.sleep(1)
 
@@ -161,7 +96,7 @@ def sweep(request, compute_ik, x, y, z):
     #TODO: tune the final orientation so that the ar tags show up in rviz
     #TODO: make it faster similar to how we did in move
 
-def get_trajectory(limb, kin, ik_solver, target_pos, num_waypoints=5):
+def get_trajectory(limb, kin, ik_solver, target_pos, num_waypoints=1):
     num_way = num_waypoints
     
     tfBuffer = tf2_ros.Buffer()
@@ -179,8 +114,6 @@ def get_trajectory(limb, kin, ik_solver, target_pos, num_waypoints=5):
     trajectory = LinearTrajectory(start_position=current_pos, goal_position=target_pos, total_time=2)
 
     path = MotionPath(limb, kin, ik_solver, trajectory)
-
-    # print("HELLLO", path.to_robot_trajectory(num_way, True))
     
     return path.to_robot_trajectory(num_way, True)
 
@@ -189,43 +122,28 @@ def linear_trajectory_move(ind, x, y, z, close=None):
     limb = intera_interface.Limb("right")
     kin = sawyer_kinematics("right")
 
-    
     target_pos = np.array([x, y, z])
 
     robot_trajectory = get_trajectory(limb, kin, ik_solver, target_pos)
 
-#     planner = PathPlanner('right_arm')
-#     previous = np.array([10,10,10,10,10,10,10])
-#     # robot_trajectory.joint_trajectory.points = robot_trajectory.joint_trajectory.points[:-2]
-#     for i in range(len(robot_trajectory.joint_trajectory.points)):
-#         ##THIS GUY IS A PROBLEM (ignores z podition in first down motion somtimes) so changed from .6 to .1
-#         if np.linalg.norm(previous - robot_trajectory.joint_trajectory.points[i].positions) < .03:
-#             continue
-#         # print(robot_trajectory.joint_trajectory.points[i])
-#         # input()
-#         plan = planner.plan_to_joint_pos(robot_trajectory.joint_trajectory.points[i].positions)
-#         previous = robot_trajectory.joint_trajectory.points[i].positions
-#         # import pdb;
-#         # pdb.set_trace()
-#         import time
-#         t = time.time()
-#         print("before execute plan")
-#         planner.execute_plan(plan[1])
-#         l = time.time()
-#         print('f', l-t)
-#    # planner.execute_plan(robot_trajectory)
-#     #print('s',time.time()-l)
-    
-
-    Kp = 0.2 * np.array([0.4, 2, 1.7, 1.5, 2, 2, 3])
-    Kd = 0.01 * np.array([2, 1, 2, 0.5, 0.8, 0.8, 0.8])
-    Ki = 0.01 * np.array([1.4, 1.4, 1.4, 1, 0.6, 0.6, 0.6])
-    Kw = np.array([0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9])
-    controller = PIDJointVelocityController(limb, kin, Kp, Ki, Kd, Kw)
-    done = controller.execute_path(
-            robot_trajectory, 
-            rate=200, timeout=3)
-    
+    planner = PathPlanner('right_arm')
+    previous = np.array([10,10,10,10,10,10,10])
+    for i in range(len(robot_trajectory.joint_trajectory.points)):
+        if np.linalg.norm(previous - robot_trajectory.joint_trajectory.points[i].positions) < .6:
+            continue
+        print(robot_trajectory.joint_trajectory.points[i])
+        # input()
+        plan = planner.plan_to_joint_pos(robot_trajectory.joint_trajectory.points[i].positions)
+        previous = robot_trajectory.joint_trajectory.points[i].positions
+        # import pdb;
+        # pdb.set_trace()
+        import time
+        t = time.time()
+        planner.execute_plan(plan[1])
+        l = time.time()
+        print('f', l-t)
+   # planner.execute_plan(robot_trajectory)
+    #print('s',time.time()-l)
 
     right_gripper = robot_gripper.Gripper('right_gripper')
     if close == 'open':
@@ -244,13 +162,6 @@ def linear_trajectory_move(ind, x, y, z, close=None):
     # current_pos = tuple([getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')])
 
 
-def pid(limb, kin):
-        Kp = 0.2 * np.array([0.4, 2, 1.7, 1.5, 2, 2, 3])
-        Kd = 0.01 * np.array([2, 1, 2, 0.5, 0.8, 0.8, 0.8])
-        Ki = 0.01 * np.array([1.4, 1.4, 1.4, 1, 0.6, 0.6, 0.6])
-        Kw = np.array([0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9])
-        controller = PIDJointVelocityController(limb, kin, Kp, Ki, Kd, Kw)
-        return controller
 
 def move(request, compute_ik, x, y, z, close):
     right_gripper = robot_gripper.Gripper('right_gripper')
@@ -267,7 +178,7 @@ def move(request, compute_ik, x, y, z, close):
     response = compute_ik(request)
     
     # Print the response HERE
-    # print(response)
+    print(response)
     group = MoveGroupCommander("right_arm")
 
     # Setting position and orientation target
@@ -296,7 +207,7 @@ def main():
     number_of_blocks = 4 # change this value every time change number of blocks (Note: this is number of blocks not number of ar tags)
     temp_ar_tag_index = number_of_blocks
 
-    sorting_algorithm = merge_sort
+    sorting_algorithm = selection_sort
 
     ar_tags_to_sort = [i for i in range(number_of_blocks)]
     rospy.wait_for_service('compute_ik')
@@ -361,82 +272,53 @@ def main():
         # print("sorted position list is ")
         # for pos in pos_list: print(pos_dict[pos])
         # print("position dict is ", pos_dict)
-
-        # 1 = orange, 0 = red, 2 = yellow, 3 = green
-        color_order = [2, 0, 1, 3] # TODO: get this from cv logitech camera
-
         initial_value_order = []
        
         for pos in pos_list:
             index_to_position[len(initial_value_order)] = pos
             initial_value_order.append(position_to_index[pos])
-        # print(initial_value_order)
-
-        color_to_ar = {initial_color_id : ar_id for initial_color_id, ar_id in zip(color_order, initial_value_order)}
-        color_to_ar[temp_ar_tag_index] = temp_ar_tag_index
+        #print(initial_value_order)
 
         # TODO: this should be done before/during sweep, no reason to do it after
-        trans = tfBuffer.lookup_transform("base", f"ar_marker_{temp_ar_tag_index}", rospy.Time(0), rospy.Duration(5.0))
+        trans = tfBuffer.lookup_transform("base", f"ar_marker_{temp_ar_tag_index}", rospy.Time(0), rospy.Duration(10.0))
         temp_pos = [getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')]
         index_to_position[temp_ar_tag_index] = tuple(temp_pos)
 
-        print("color_to_ar", color_to_ar)
-        print("initial value order (ar tag)", initial_value_order)
-        selection_sort_visualization = sorting_algorithm(color_order) # use color_order instead of initial_value_order
+
+        print("initial value order", initial_value_order)
+        selection_sort_visualization = sorting_algorithm(initial_value_order)
         print("list after selection sort ", selection_sort_visualization)
         print("ind dictionary", index_to_position)
         input("Start moving! Press [ Enter ]")
-
-        if sorting_algorithm == merge_sort:
-            for entry in selection_sort_visualization:
-                try:
-                    print('go above')
-                    linear_trajectory_move(entry.start, index_to_position[color_to_ar[entry.start]][0], index_to_position[color_to_ar[entry.start]][1], .2)
-                    print('go down')
-                    linear_trajectory_move(entry.start, index_to_position[color_to_ar[entry.start]][0], index_to_position[color_to_ar[entry.start]][1], -.025, 'close')
-                    print('go back up')
-                    linear_trajectory_move(entry.start, index_to_position[color_to_ar[entry.start]][0], index_to_position[color_to_ar[entry.start]][1], .2)
-                    
-                    linear_trajectory_move(entry.end, index_to_position[color_to_ar[entry.end]][0], index_to_position[color_to_ar[entry.end]][1], 0.2)
-                    print("NOW")
-                    linear_trajectory_move(entry.end, index_to_position[color_to_ar[entry.end]][0], index_to_position[color_to_ar[entry.end]][1], -.025, 'open')
-                    linear_trajectory_move(entry.end, index_to_position[color_to_ar[entry.end]][0], index_to_position[color_to_ar[entry.end]][1], 0.2)
-                    
-                    
-                except rospy.ServiceException as e:
-                    print("Service call failed: %s"%e)
         
-        else:
-            for entry in selection_sort_visualization:
-                try:
-                    print("entry is ", entry)
-                    print('Move to next block - Press [ Enter ]')
-                    print(f'picking up from {entry.start}')
+        for entry in selection_sort_visualization:
+            try:
+                print("entry is ", entry)
+                print('Move to next block - Press [ Enter ]')
+                print(f'picking up from {entry.start}')
 
-                    # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], 0, 2)
-                    # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], -.15, 1) # 1 means close
-                    # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], 0, 2)
-                    print('go above')
-                    linear_trajectory_move(entry.start, index_to_position[color_to_ar[entry.start]][0], index_to_position[color_to_ar[entry.start]][1], .2)
-                    print('go down')
-                    linear_trajectory_move(entry.start, index_to_position[color_to_ar[entry.start]][0], index_to_position[color_to_ar[entry.start]][1], -.025, 'close')
-                    print('go back up')
-                    linear_trajectory_move(entry.start, index_to_position[color_to_ar[entry.start]][0], index_to_position[color_to_ar[entry.start]][1], .2)
+                # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], 0, 2)
+                # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], -.15, 1) # 1 means close
+                # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], 0, 2)
+                print('go above')
+                linear_trajectory_move(entry.start, index_to_position[entry.start][0], index_to_position[entry.start][1], .2)
+                print('go down')
+                linear_trajectory_move(entry.start, index_to_position[entry.start][0], index_to_position[entry.start][1], -.025, 'close')
+                print('go back up')
+                linear_trajectory_move(entry.start, index_to_position[entry.start][0], index_to_position[entry.start][1], .2)
 
-                    print(f'placing at {entry.end}')
-                    # move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], 0, 2)
-                    # move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], -.15, 0) # 0 means open
-                    # move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], 0, 2)
-                    linear_trajectory_move(entry.end, index_to_position[color_to_ar[entry.end]][0], index_to_position[color_to_ar[entry.end]][1], 0.2)
-                    print("NOW")
-                    linear_trajectory_move(entry.end, index_to_position[color_to_ar[entry.end]][0], index_to_position[color_to_ar[entry.end]][1], -.025, 'open')
-                    linear_trajectory_move(entry.end, index_to_position[color_to_ar[entry.end]][0], index_to_position[color_to_ar[entry.end]][1], 0.2)
-                    
-                    
-                except rospy.ServiceException as e:
-                    print("Service call failed: %s"%e)
+                print(f'placing at {entry.end}')
+                # move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], 0, 2)
+                # move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], -.15, 0) # 0 means open
+                # move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], 0, 2)
+                linear_trajectory_move(entry.end, index_to_position[entry.end][0], index_to_position[entry.end][1], 0.2)
+                linear_trajectory_move(entry.end, index_to_position[entry.end][0], index_to_position[entry.end][1], -.025, 'open')
+                linear_trajectory_move(entry.end, index_to_position[entry.end][0], index_to_position[entry.end][1], 0.2)
+                
+                
+            except rospy.ServiceException as e:
+                print("Service call failed: %s"%e)
 
 # Python's syntax for a main() method
 if __name__ == '__main__':
     main()
-
