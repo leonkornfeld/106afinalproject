@@ -21,13 +21,13 @@ COLOR_2_IDX = {
     "black" : 6,
 }
 
-def detect_color_positions(target_color, image_path, output_path, tolerance=(20, 100, 100)):
+def detect_color_positions(target_color, image_path, output_path, tolerance=np.array([10, 25, 25])):
     assert target_color in COLORS
 
     image = cv2.imread(image_path)
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-    base_hsv = COLORS[target_color]
+    base_hsv = COLORS[target_color].astype(np.uint32)
     lower_bound = np.array([
         max(0, base_hsv[0] - tolerance[0]),
         max(0, base_hsv[1] - tolerance[1]),
@@ -72,7 +72,7 @@ def get_hsv_value(event, x, y, flags, param):
     if event == cv2.EVENT_LBUTTONDOWN and click_count < len(detect_colors):
         hsv_value = hsv[y, x]
         color_name = detect_colors[click_count]
-        COLORS[color_name] = hsv_value
+        COLORS[color_name] = hsv_value.astype(np.uint32)
         print(f"Updated '{color_name}' to HSV value from ({x}, {y}): {hsv_value}")
         click_count += 1
 
@@ -98,10 +98,9 @@ if calibrate_colors == "y":
             break
 
     cv2.destroyAllWindows()
-    print("Updated COLORS:", COLORS)
 
 for color in detect_colors:
-    output_path = f'pictures/logitech_examples_output/example{example}_output_{color}.jpg'
+    output_path = f'pictures/logitech_examples_output/output_{color}.jpg'
     color_positions[color] = detect_color_positions(color, image_path, output_path)
 
 colors_detected = [color for color in detect_colors if color_positions[color] != []]
