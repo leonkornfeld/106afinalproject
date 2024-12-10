@@ -7,7 +7,8 @@ def get_hsv_value(event, x, y, flags, param):
         print(f"HSV value at ({x}, {y}): {hsv_value}")
 
 # Load the image
-image_path = "pictures/logitech_examples/example4.jpg"  # Replace with your image path
+example = input('Use which example to test on? ')
+image_path = f"pictures/logitech_examples/example{example}.jpg"  # Replace with your image path
 image = cv2.imread(image_path)
 
 if image is None:
