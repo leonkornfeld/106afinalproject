@@ -1,5 +1,8 @@
 import cv2
 import numpy as np
+import time
+
+MAX_TIME = 3
 
 COLORS = {
     "red": np.array([1, 230, 162]), 
@@ -57,13 +60,9 @@ def detect_color_positions(target_color, image_path, output_path, tolerance=np.a
         if (area > 30) and (mid_range_start <= cx <= mid_range_end):
             positions_with_areas.append(((cx, cy), area))
 
-    # Sort by contour area in descending order
     positions_with_areas.sort(key=lambda item: item[1], reverse=True)
-
-    # Extract sorted positions
     positions = [pos for pos, _ in positions_with_areas]
 
-    # Draw the positions on the image
     for i, pos in enumerate(positions):
         cx, cy = pos
         bgr_color = cv2.cvtColor(np.uint8([[base_hsv]]), cv2.COLOR_HSV2BGR)[0][0]
@@ -98,6 +97,10 @@ while c in COLORS:
     detect_colors.append(c)
     c = input()
 
+color_counts = {}
+for color in detect_colors:
+    color_counts[color] = color_counts.get(color, 0) + 1
+
 calibrate_colors = input("Calibrate colors? [y/n]: ")
 if calibrate_colors == "y":
     click_count = 0
@@ -114,9 +117,27 @@ if calibrate_colors == "y":
 
     cv2.destroyAllWindows()
 
-for color in detect_colors:
+start_time = time.time()
+
+for color in set(detect_colors): # run the detection process on all types of colors listed in detect_colors
     output_path = f'pictures/logitech_examples_output/output_{color}.jpg'
-    color_positions[color] = detect_color_positions(color, image_path, output_path)
+    
+    tolerance = np.array([10, 25, 25])
+    positions = detect_color_positions(color, image_path, output_path)
+
+    while len(positions) != color_counts[color]:
+
+        assert time.time() - start_time < MAX_TIME, \
+            f"Exceeded maximum time allowance of {MAX_TIME} seconds. Giving up!"
+
+        if len(positions) < color_counts[color]: # increase tolerance
+            tolerance += 1
+            positions = detect_color_positions(color, image_path, output_path, tolerance=tolerance)   
+        elif len(positions) > color_counts[color]: # decrease tolerances
+            tolerance -= 1
+            positions = detect_color_positions(color, image_path, output_path, tolerance=tolerance)
+
+    color_positions[color] = positions
 
 colors_detected = [color for color in detect_colors if color_positions[color] != []]
 
