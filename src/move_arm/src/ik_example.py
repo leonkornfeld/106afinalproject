@@ -8,6 +8,7 @@ from numpy import linalg
 import sys
 from intera_interface import gripper as robot_gripper
 import tf2_ros
+import math
 
 from paths.trajectories import LinearTrajectory # pyright: ignore
 from paths.paths import MotionPath # pyright: ignore
@@ -25,11 +26,13 @@ print('Done!')
 index_to_position = {} #reversed pos dict index -> xyz
 
 class Entry():
-    def __init__(self, start, end):
+    def __init__(self, start, end, level = None):
         self.start = start
         self.end = end
+        self.level = level
     def __repr__(self):
-        return f"Entry(start={self.start}, end={self.end})"
+        return f"Entry(start={self.start}, end={self.end}, level={self.level})"
+
 
 def selection_sort(arr):
     temp = len(arr)
@@ -377,42 +380,64 @@ def main():
         # color_to_ar[temp_ar_tag_index] = temp_ar_tag_index
 
         # TODO: this should be done before/during sweep, no reason to do it after
-        trans = tfBuffer.lookup_transform("base", f"ar_marker_{temp_ar_tag_index}", rospy.Time(0), rospy.Duration(5.0))
-        temp_pos = [getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')]
-        index_to_position[temp_ar_tag_index] = tuple(temp_pos)
+        if sorting_algorithm != merge_sort:
+            trans = tfBuffer.lookup_transform("base", f"ar_marker_{temp_ar_tag_index}", rospy.Time(0), rospy.Duration(5.0))
+            temp_pos = [getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')]
+            index_to_position[temp_ar_tag_index] = tuple(temp_pos)
 
         # print("color_to_ar", color_to_ar)
         # print("initial value order (ar tag)", initial_value_order)
 
-        print("color_order", color_order)
-        selection_sort_visualization = sorting_algorithm(color_order) # use color_order instead of initial_value_order
-        print("list after selection sort ", selection_sort_visualization)
-
-        # print("ind dictionary", index_to_position)
-        input("Start moving! Press [ Enter ]")
-
+        
         if sorting_algorithm == merge_sort:
-            for entry in selection_sort_visualization:
+            movements =[]
+            color_order2 = [(color_order[i], i) for i in range(len(color_order))]
+            print("Original array:", color_order)
+            sorted_array = merge_sort(color_order2, movements)
+            print("Sorted array:", sorted_array)
+            # print(movements)
+            sorted_movements = sorted(movements, key=lambda x: x.level)
+            temp = set([i for i in range(len(color_order))])
+            for movement in sorted_movements:
+                if movement.level != 0:
+                    break
+                if movement.start in temp:
+                    temp.remove(movement.start)
+            for num in temp:
+                sorted_movements.append(Entry(num,num, 0))    
+            sorted_movements = sorted(sorted_movements, key=lambda x: (x.level, x.end))
+
+            print(sorted_movements)
+            input()
+            level_counter = 0
+            flag = False
+            for entry in sorted_movements:
                 try:
-                    offset = (entry.level)*(.5)
+                    offset = .1
+                    print(offset)
+                    if level_counter == 4:
+                        for i in range(len(index_to_position)):
+                            index_to_position[i] = (index_to_position[i][0]-offset, index_to_position[i][1], index_to_position[i][2])
+                        level_counter = 0
                     print("entry is ", entry)
                     print('Move to next block - Press [ Enter ]')
                     print(f'picking up from {entry.start}')
+                    print("index to position dict is ", index_to_position)
 
                     # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], 0, 2)
                     # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], -.15, 1) # 1 means close
                     # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], 0, 2)
                     print('go above', index_to_position[entry.start])
                     # index_to_position[color_to_ar[entry.start]][0]
-                    linear_trajectory_move(entry.start, index_to_position[entry.start][0] - offset, index_to_position[entry.start][1], .2)
+                    linear_trajectory_move(entry.start, index_to_position[entry.start][0], index_to_position[entry.start][1], .2)
                     if not flag:
-                        linear_trajectory_move(entry.start, index_to_position[entry.start][0] - offset, index_to_position[entry.start][1], .15)
+                        linear_trajectory_move(entry.start, index_to_position[entry.start][0], index_to_position[entry.start][1], .15)
                         flag = True
                     # input('after 1st move')
                     print('go down', index_to_position[entry.start])
-                    linear_trajectory_move(entry.start, index_to_position[entry.start][0] - offset, index_to_position[entry.start][1], -.025, 'close')
+                    linear_trajectory_move(entry.start, index_to_position[entry.start][0], index_to_position[entry.start][1], -.025, 'close')
                     print('go back up', index_to_position[entry.start])
-                    linear_trajectory_move(entry.start, index_to_position[entry.start][0] - offset, index_to_position[entry.start][1], .2)
+                    linear_trajectory_move(entry.start, index_to_position[entry.start][0], index_to_position[entry.start][1], .2)
 
                     print(f'placing at {entry.end}')
                     # move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], 0, 2)
@@ -424,7 +449,7 @@ def main():
                     linear_trajectory_move(entry.end, index_to_position[entry.end][0] - offset, index_to_position[entry.end][1], -.025, 'open')
                     print("6th move", index_to_position[entry.end])
                     linear_trajectory_move(entry.end, index_to_position[entry.end][0] - offset, index_to_position[entry.end][1], 0.2)
-                    
+                    level_counter+=1
                     
                     
                     
@@ -432,6 +457,13 @@ def main():
                     print("Service call failed: %s"%e)
         
         else:
+            print("color_order", color_order)
+            selection_sort_visualization = sorting_algorithm(color_order) # use color_order instead of initial_value_order
+            print("list after selection sort ", selection_sort_visualization)
+
+            # print("ind dictionary", index_to_position)
+            input("Start moving! Press [ Enter ]")
+
             flag = False
             for entry in selection_sort_visualization:
                 try:
