@@ -25,6 +25,11 @@ def detect_color_positions(target_color, image_path, output_path, tolerance=np.a
     assert target_color in COLORS
 
     image = cv2.imread(image_path)
+
+    height, width = image.shape[:2]
+    mid_range_start = int(width * 0.25)
+    mid_range_end = int(width * 0.75)
+
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
     base_hsv = COLORS[target_color].astype(np.uint32)
@@ -40,23 +45,33 @@ def detect_color_positions(target_color, image_path, output_path, tolerance=np.a
     ], dtype=np.uint8)
 
     mask = cv2.inRange(hsv, lower_bound, upper_bound)
-    cv2.imwrite(f'pictures/logitech_examples_output/masks/mask_{color}.jpg', mask)
+    cv2.imwrite(f'pictures/logitech_examples_output/masks/mask_{target_color}.jpg', mask)
 
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    positions = []
+    positions_with_areas = []
     for contour in contours:
-        if cv2.contourArea(contour) > 30:
-            x, y, w, h = cv2.boundingRect(contour)
-            cx, cy = x + w // 2, y + h // 2
-            positions.append((cx, cy))
+        area = cv2.contourArea(contour)
+        x, y, w, h = cv2.boundingRect(contour)
+        cx, cy = x + w // 2, y + h // 2
+        if (area > 30) and (mid_range_start <= cx <= mid_range_end):
+            positions_with_areas.append(((cx, cy), area))
 
-            bgr_color = cv2.cvtColor(np.uint8([[base_hsv]]), cv2.COLOR_HSV2BGR)[0][0]
-            bgr_color = tuple(int(c) for c in bgr_color)
+    # Sort by contour area in descending order
+    positions_with_areas.sort(key=lambda item: item[1], reverse=True)
 
-            cv2.circle(image, (cx, cy), 10, bgr_color, -1)  
-            cv2.putText(image, f"({cx}, {cy})", (cx + 10, cy - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, bgr_color, 2)
+    # Extract sorted positions
+    positions = [pos for pos, _ in positions_with_areas]
+
+    # Draw the positions on the image
+    for i, pos in enumerate(positions):
+        cx, cy = pos
+        bgr_color = cv2.cvtColor(np.uint8([[base_hsv]]), cv2.COLOR_HSV2BGR)[0][0]
+        bgr_color = tuple(int(c) for c in bgr_color)
+
+        cv2.circle(image, (cx, cy), 10, bgr_color, -1)  
+        cv2.putText(image, f"{i}. ({cx}, {cy})", (cx + 10, cy - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, bgr_color, 2)
 
     cv2.imwrite(output_path, image)
     return positions
