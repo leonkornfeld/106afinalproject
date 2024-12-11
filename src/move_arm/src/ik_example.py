@@ -224,7 +224,7 @@ def linear_trajectory_move(ind, x, y, z, close=None):
     controller = PIDJointVelocityController(limb, kin, Kp, Ki, Kd, Kw)
     done = controller.execute_path(
             robot_trajectory, 
-            rate=200, timeout=3)
+            rate=100, timeout=3)
     
 
     right_gripper = robot_gripper.Gripper('right_gripper')
@@ -310,7 +310,6 @@ def main():
         right_gripper.open()
         input('Starting sort - Press [ Enter ]: ')
         pos_list = [] # list of ar tag coordinates (x, y, z)
-        position_to_index = {} # dictionary of position (x,y,z) -> ar tag index (currently 0 -> 3)
         
 
         tfBuffer = tf2_ros.Buffer()
@@ -321,92 +320,119 @@ def main():
         request.ik_request.ik_link_name = link
         request.ik_request.pose_stamped.header.frame_id = "base"
 
-        def scan_ar_tags(pos_list, position_to_index):
+        def scan_ar_tags(pos_list):
             for tag in ar_tags_to_sort:
-                if tag not in position_to_index.values():
-                    try:
-                        trans = tfBuffer.lookup_transform("base", f"ar_marker_{tag}", rospy.Time(0), rospy.Duration(1.0))
-                        tag_pos = [getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')]
-                        pos_list.append(tuple(tag_pos))
-                        position_to_index[tuple(tag_pos)] = tag
-                    except Exception as e:
-                        print(e)
-            return pos_list, position_to_index
+                try:
+                    trans = tfBuffer.lookup_transform("base", f"ar_marker_{tag}", rospy.Time(0), rospy.Duration(1.0))
+                    tag_pos = [getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')]
+                    pos_list.append(tuple(tag_pos))
+                    # position_to_index[tuple(tag_pos)] = tag
+                except Exception as e:
+                    print(e)
+            return pos_list
         
-        pos_list, position_to_index = scan_ar_tags(pos_list, position_to_index)
+        pos_list = scan_ar_tags(pos_list)
 
         assert(len(pos_list) > 0) 
 
-        if len(position_to_index.values()) != number_of_blocks:
-            # move to a found ar tag -> sweep!
-            print("Sweeping since missing ar tags")
-            sweep(request, compute_ik, pos_list[0][0], pos_list[0][1], 0) # move to an arbitrary ar tag TODO: maybe don't have it be arbitrary
-            epsilon = 0.0
-            while len(position_to_index.values()) != number_of_blocks: 
-                epsilon += 0.1
+        # if len(position_to_index.values()) != number_of_blocks:
+        #     # move to a found ar tag -> sweep!
+        #     print("Sweeping since missing ar tags")
+        #     sweep(request, compute_ik, pos_list[0][0], pos_list[0][1], 0) # move to an arbitrary ar tag TODO: maybe don't have it be arbitrary
+        #     epsilon = 0.0
+        #     while len(position_to_index.values()) != number_of_blocks: 
+        #         epsilon += 0.1
 
-                input(f'Sweep left/right by {epsilon} - Press [ Enter ]')
+        #         input(f'Sweep left/right by {epsilon} - Press [ Enter ]')
 
-                print("Performing sweep in direction 1")
-                sweep(request, compute_ik, pos_list[0][0], pos_list[0][1] + epsilon, 0.3)
-                pos_list, position_to_index = scan_ar_tags(pos_list, position_to_index)
+        #         print("Performing sweep in direction 1")
+        #         sweep(request, compute_ik, pos_list[0][0], pos_list[0][1] + epsilon, 0.3)
+        #         pos_list, position_to_index = scan_ar_tags(pos_list, position_to_index)
 
-                print("Performing sweep in direction 2")
-                sweep(request, compute_ik, pos_list[0][0], pos_list[0][1] - epsilon, 0.3)
-                pos_list, position_to_index = scan_ar_tags(pos_list, position_to_index)
+        #         print("Performing sweep in direction 2")
+        #         sweep(request, compute_ik, pos_list[0][0], pos_list[0][1] - epsilon, 0.3)
+        #         pos_list, position_to_index = scan_ar_tags(pos_list, position_to_index)
 
         # print('unsorted pos_list')
         # for pos in pos_list: print(pos_dict[pos])
+        
         pos_list.sort(key=lambda triple: triple[1]) # sort by y-value instead of x-value since that corresponds to location in base_frame
+        index_to_position = {i:pos_list[i] for i in range(len(pos_list))} # dictionary of position (x,y,z) -> ar tag index (currently 0 -> 3)
+
         # print("sorted position list is ")
         # for pos in pos_list: print(pos_dict[pos])
         # print("position dict is ", pos_dict)
 
         # 1 = orange, 0 = red, 2 = yellow, 3 = green
-        color_order = [2, 0, 1, 3] # TODO: get this from cv logitech camera
+        color_order = [2, 1, 3, 0] # TODO: get this from cv logitech camera
 
         initial_value_order = []
        
-        for pos in pos_list:
-            index_to_position[len(initial_value_order)] = pos
-            initial_value_order.append(position_to_index[pos])
+        # for pos in pos_list:
+        #     index_to_position[len(initial_value_order)] = pos
+        #     initial_value_order.append(position_to_index[pos])
         # print(initial_value_order)
 
-        color_to_ar = {initial_color_id : ar_id for initial_color_id, ar_id in zip(color_order, initial_value_order)}
-        color_to_ar[temp_ar_tag_index] = temp_ar_tag_index
+        # color_to_ar = {initial_color_id : ar_id for initial_color_id, ar_id in zip(color_order, initial_value_order)}
+        # color_to_ar[temp_ar_tag_index] = temp_ar_tag_index
 
         # TODO: this should be done before/during sweep, no reason to do it after
         trans = tfBuffer.lookup_transform("base", f"ar_marker_{temp_ar_tag_index}", rospy.Time(0), rospy.Duration(5.0))
         temp_pos = [getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')]
         index_to_position[temp_ar_tag_index] = tuple(temp_pos)
 
-        print("color_to_ar", color_to_ar)
-        print("initial value order (ar tag)", initial_value_order)
+        # print("color_to_ar", color_to_ar)
+        # print("initial value order (ar tag)", initial_value_order)
+
+        print("color_order", color_order)
         selection_sort_visualization = sorting_algorithm(color_order) # use color_order instead of initial_value_order
         print("list after selection sort ", selection_sort_visualization)
-        print("ind dictionary", index_to_position)
+
+        # print("ind dictionary", index_to_position)
         input("Start moving! Press [ Enter ]")
 
         if sorting_algorithm == merge_sort:
             for entry in selection_sort_visualization:
                 try:
-                    print('go above')
-                    linear_trajectory_move(entry.start, index_to_position[color_to_ar[entry.start]][0], index_to_position[color_to_ar[entry.start]][1], .2)
-                    print('go down')
-                    linear_trajectory_move(entry.start, index_to_position[color_to_ar[entry.start]][0], index_to_position[color_to_ar[entry.start]][1], -.025, 'close')
-                    print('go back up')
-                    linear_trajectory_move(entry.start, index_to_position[color_to_ar[entry.start]][0], index_to_position[color_to_ar[entry.start]][1], .2)
+                    offset = (entry.level)*(.5)
+                    print("entry is ", entry)
+                    print('Move to next block - Press [ Enter ]')
+                    print(f'picking up from {entry.start}')
+
+                    # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], 0, 2)
+                    # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], -.15, 1) # 1 means close
+                    # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], 0, 2)
+                    print('go above', index_to_position[entry.start])
+                    # index_to_position[color_to_ar[entry.start]][0]
+                    linear_trajectory_move(entry.start, index_to_position[entry.start][0] - offset, index_to_position[entry.start][1], .2)
+                    if not flag:
+                        linear_trajectory_move(entry.start, index_to_position[entry.start][0] - offset, index_to_position[entry.start][1], .15)
+                        flag = True
+                    # input('after 1st move')
+                    print('go down', index_to_position[entry.start])
+                    linear_trajectory_move(entry.start, index_to_position[entry.start][0] - offset, index_to_position[entry.start][1], -.025, 'close')
+                    print('go back up', index_to_position[entry.start])
+                    linear_trajectory_move(entry.start, index_to_position[entry.start][0] - offset, index_to_position[entry.start][1], .2)
+
+                    print(f'placing at {entry.end}')
+                    # move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], 0, 2)
+                    # move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], -.15, 0) # 0 means open
+                    # move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], 0, 2)
+                    print("4th move", index_to_position[entry.end])
+                    linear_trajectory_move(entry.end, index_to_position[entry.end][0] - offset, index_to_position[entry.end][1], 0.2)
+                    print("5th move", index_to_position[entry.end])
+                    linear_trajectory_move(entry.end, index_to_position[entry.end][0] - offset, index_to_position[entry.end][1], -.025, 'open')
+                    print("6th move", index_to_position[entry.end])
+                    linear_trajectory_move(entry.end, index_to_position[entry.end][0] - offset, index_to_position[entry.end][1], 0.2)
                     
-                    linear_trajectory_move(entry.end, index_to_position[color_to_ar[entry.end]][0], index_to_position[color_to_ar[entry.end]][1], 0.2)
-                    print("NOW")
-                    linear_trajectory_move(entry.end, index_to_position[color_to_ar[entry.end]][0], index_to_position[color_to_ar[entry.end]][1], -.025, 'open')
-                    linear_trajectory_move(entry.end, index_to_position[color_to_ar[entry.end]][0], index_to_position[color_to_ar[entry.end]][1], 0.2)
+                    
                     
                     
                 except rospy.ServiceException as e:
                     print("Service call failed: %s"%e)
         
         else:
+            flag = False
             for entry in selection_sort_visualization:
                 try:
                     print("entry is ", entry)
@@ -416,21 +442,28 @@ def main():
                     # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], 0, 2)
                     # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], -.15, 1) # 1 means close
                     # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], 0, 2)
-                    print('go above')
-                    linear_trajectory_move(entry.start, index_to_position[color_to_ar[entry.start]][0], index_to_position[color_to_ar[entry.start]][1], .2)
-                    print('go down')
-                    linear_trajectory_move(entry.start, index_to_position[color_to_ar[entry.start]][0], index_to_position[color_to_ar[entry.start]][1], -.025, 'close')
-                    print('go back up')
-                    linear_trajectory_move(entry.start, index_to_position[color_to_ar[entry.start]][0], index_to_position[color_to_ar[entry.start]][1], .2)
+                    print('go above', index_to_position[entry.start])
+                    # index_to_position[color_to_ar[entry.start]][0]
+                    linear_trajectory_move(entry.start, index_to_position[entry.start][0], index_to_position[entry.start][1], .2)
+                    if not flag:
+                        linear_trajectory_move(entry.start, index_to_position[entry.start][0], index_to_position[entry.start][1], .15)
+                        flag = True
+                    # input('after 1st move')
+                    print('go down', index_to_position[entry.start])
+                    linear_trajectory_move(entry.start, index_to_position[entry.start][0], index_to_position[entry.start][1], -.025, 'close')
+                    print('go back up', index_to_position[entry.start])
+                    linear_trajectory_move(entry.start, index_to_position[entry.start][0], index_to_position[entry.start][1], .2)
 
                     print(f'placing at {entry.end}')
                     # move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], 0, 2)
                     # move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], -.15, 0) # 0 means open
                     # move(request, compute_ik, index_to_position[entry.end][0], index_to_position[entry.end][1], 0, 2)
-                    linear_trajectory_move(entry.end, index_to_position[color_to_ar[entry.end]][0], index_to_position[color_to_ar[entry.end]][1], 0.2)
-                    print("NOW")
-                    linear_trajectory_move(entry.end, index_to_position[color_to_ar[entry.end]][0], index_to_position[color_to_ar[entry.end]][1], -.025, 'open')
-                    linear_trajectory_move(entry.end, index_to_position[color_to_ar[entry.end]][0], index_to_position[color_to_ar[entry.end]][1], 0.2)
+                    print("4th move", index_to_position[entry.end])
+                    linear_trajectory_move(entry.end, index_to_position[entry.end][0], index_to_position[entry.end][1], 0.2)
+                    print("5th move", index_to_position[entry.end])
+                    linear_trajectory_move(entry.end, index_to_position[entry.end][0], index_to_position[entry.end][1], -.025, 'open')
+                    print("6th move", index_to_position[entry.end])
+                    linear_trajectory_move(entry.end, index_to_position[entry.end][0], index_to_position[entry.end][1], 0.2)
                     
                     
                 except rospy.ServiceException as e:
