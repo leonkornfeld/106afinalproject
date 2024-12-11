@@ -24,6 +24,23 @@ COLOR_2_IDX = {
     "black" : 6,
 }
 
+def capture_image(output_path, camera_index=0):
+    cap = cv2.VideoCapture(camera_index)
+
+    if not cap.isOpened():
+        print("Error: Could not access the webcam.")
+        return
+
+    ret, frame = cap.read()
+
+    if ret:
+        cv2.imwrite(output_path, frame)
+        print(f"Image saved at {output_path}")
+    else:
+        print("Error: Could not capture image.")
+
+    cap.release()
+
 def detect_color_positions(target_color, image_path, output_path, tolerance=np.array([10, 25, 25])):
     assert target_color in COLORS
 
