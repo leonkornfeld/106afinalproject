@@ -122,7 +122,7 @@ def get_trajectory(limb, kin, ik_solver, tag_pos, args):
     return path.to_robot_trajectory(num_way, True)
 
 def get_controller(controller_name, limb, kin):
-    """
+    """controller = get_controller(args.controller_name, limb, kin
     Gets the correct controller from controllers.py
 
     Parameters
@@ -193,10 +193,7 @@ def main():
 
     # Lookup the AR tag position.
     tag_pos = [lookup_tag(marker) for marker in args.ar_marker]
-
-    # Get an appropriate RobotTrajectory for the task (circular, linear, or square)
-    # If the controller is a workspace controller, this should return a trajectory where the
-    # positions and velocities are workspace positions and velocities.  If the controller
+# controller If the controller
     # is a jointspace or torque controller, it should return a trajectory where the positions
     # and velocities are the positions and velocities of each joint.
     robot_trajectory = get_trajectory(limb, kin, ik_solver, tag_pos, args)
@@ -233,7 +230,7 @@ def main():
             input('Press <Enter> to execute the trajectory using YOUR OWN controller')
         except KeyboardInterrupt:
             sys.exit()
-        # execute the path using your own controller.
+        # execute the pcontroller ath using your own controller.
         done = controller.execute_path(
             robot_trajectory, 
             rate=args.rate, 

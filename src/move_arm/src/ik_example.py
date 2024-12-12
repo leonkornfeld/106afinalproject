@@ -17,7 +17,9 @@ import intera_interface
 from trac_ik_python.trac_ik import IK
 from moveit_msgs.msg import DisplayTrajectory, RobotState
 from sawyer_pykdl import sawyer_kinematics # pyright: ignore
-from controllers.controllers import PIDJointVelocityController
+
+from color_detection import capture_image, get_color_order
+from controllers.controllers import PIDJointVelocityController #pyright: ignore
 
 
 
@@ -296,10 +298,12 @@ def move(request, compute_ik, x, y, z, close):
 def main():
     # Wait for the IK service to become available
 
-    number_of_blocks = 4 # change this value every time change number of blocks (Note: this is number of blocks not number of ar tags)
+    save_path = 'pictures/logitech_output/image.jpg'
+
+    number_of_blocks = 4 # TODO: FIX THIS!
     temp_ar_tag_index = number_of_blocks
 
-    sorting_algorithm = merge_sort
+    sorting_algorithm = insertion_sort
 
     ar_tags_to_sort = [i for i in range(number_of_blocks)]
     rospy.wait_for_service('compute_ik')
@@ -366,9 +370,6 @@ def main():
         # for pos in pos_list: print(pos_dict[pos])
         # print("position dict is ", pos_dict)
 
-        # 1 = orange, 0 = red, 2 = yellow, 3 = green
-        color_order = [2, 1, 3, 0] # TODO: get this from cv logitech camera
-
         initial_value_order = []
        
         # for pos in pos_list:
@@ -388,8 +389,15 @@ def main():
         # print("color_to_ar", color_to_ar)
         # print("initial value order (ar tag)", initial_value_order)
 
+        input('Take Picture? Press [ Enter ]')
+
+        capture_image(save_path)
+        color_order = get_color_order(save_path)
+
+        print("COLOR_ORDER:", color_order)
         
         if sorting_algorithm == merge_sort:
+            print("going into merge sort!!!")
             movements =[]
             color_order2 = [(color_order[i], i) for i in range(len(color_order))]
             print("Original array:", color_order)
@@ -459,7 +467,7 @@ def main():
         else:
             print("color_order", color_order)
             selection_sort_visualization = sorting_algorithm(color_order) # use color_order instead of initial_value_order
-            print("list after selection sort ", selection_sort_visualization)
+            print("list after sort ", selection_sort_visualization)
 
             # print("ind dictionary", index_to_position)
             input("Start moving! Press [ Enter ]")
@@ -480,7 +488,7 @@ def main():
                     if not flag:
                         linear_trajectory_move(entry.start, index_to_position[entry.start][0], index_to_position[entry.start][1], .15)
                         flag = True
-                    # input('after 1st move')
+                    input('after 1st move')
                     print('go down', index_to_position[entry.start])
                     linear_trajectory_move(entry.start, index_to_position[entry.start][0], index_to_position[entry.start][1], -.025, 'close')
                     print('go back up', index_to_position[entry.start])
