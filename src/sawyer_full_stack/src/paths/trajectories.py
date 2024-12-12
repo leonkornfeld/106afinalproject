@@ -218,13 +218,13 @@ class LinearTrajectory(Trajectory):
             # For the first half of the trajectory, we maintain a constant acceleration
 
             
-            linear_vel = time * self.acceleration
+            linear_vel = (time * self.acceleration)*0.7 #decreased linear vel
         else:
             # TODO: start slowing the velocity down from the maximum one
             # For the second half of the trajectory, maintain a constant deceleration
 
             time_past_mid = time-self.total_time/2.0
-            linear_vel = self.v_max - self.acceleration*time_past_mid
+            linear_vel = (self.v_max - self.acceleration*time_past_mid)*0.7 #decreased linear vel 12/12
         return np.hstack((linear_vel, np.zeros(3)))
 
 class CircularTrajectory(Trajectory):

@@ -181,7 +181,7 @@ def get_trajectory(limb, kin, ik_solver, target_pos, num_waypoints=5):
     # index_to_position[ind] = tuple(current_pos)
 
 
-    trajectory = LinearTrajectory(start_position=current_pos, goal_position=target_pos, total_time=2)
+    trajectory = LinearTrajectory(start_position=current_pos, goal_position=target_pos, total_time=5)
 
     path = MotionPath(limb, kin, ik_solver, trajectory)
 
@@ -223,13 +223,13 @@ def linear_trajectory_move(ind, x, y, z, close=None):
     
 
     Kp = 0.2 * np.array([0.4, 2, 1.7, 1.5, 2, 2, 3])
-    Kd = 0.01 * np.array([2, 1, 2, 0.5, 0.8, 0.8, 0.8])
-    Ki = 0.01 * np.array([1.4, 1.4, 1.4, 1, 0.6, 0.6, 0.6])
+    Kd = 0.01 * np.array([2, 1, 2, 0.5, 0.8, 0.8, 0.8]) #0.01
+    Ki = 0.01 * np.array([1.4, 1.4, 1.4, 1, 0.6, 0.6, 0.6]) #0.01
     Kw = np.array([0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9])
     controller = PIDJointVelocityController(limb, kin, Kp, Ki, Kd, Kw)
     done = controller.execute_path(
             robot_trajectory, 
-            rate=100, timeout=3)
+            rate=100, timeout=6)
     
 
     right_gripper = robot_gripper.Gripper('right_gripper')
@@ -303,7 +303,7 @@ def main():
     number_of_blocks = 4 # TODO: FIX THIS!
     temp_ar_tag_index = number_of_blocks
 
-    sorting_algorithm = insertion_sort
+    sorting_algorithm = selection_sort
 
     ar_tags_to_sort = [i for i in range(number_of_blocks)]
     rospy.wait_for_service('compute_ik')
@@ -341,44 +341,11 @@ def main():
         pos_list = scan_ar_tags(pos_list)
 
         assert(len(pos_list) > 0) 
-
-        # if len(position_to_index.values()) != number_of_blocks:
-        #     # move to a found ar tag -> sweep!
-        #     print("Sweeping since missing ar tags")
-        #     sweep(request, compute_ik, pos_list[0][0], pos_list[0][1], 0) # move to an arbitrary ar tag TODO: maybe don't have it be arbitrary
-        #     epsilon = 0.0
-        #     while len(position_to_index.values()) != number_of_blocks: 
-        #         epsilon += 0.1
-
-        #         input(f'Sweep left/right by {epsilon} - Press [ Enter ]')
-
-        #         print("Performing sweep in direction 1")
-        #         sweep(request, compute_ik, pos_list[0][0], pos_list[0][1] + epsilon, 0.3)
-        #         pos_list, position_to_index = scan_ar_tags(pos_list, position_to_index)
-
-        #         print("Performing sweep in direction 2")
-        #         sweep(request, compute_ik, pos_list[0][0], pos_list[0][1] - epsilon, 0.3)
-        #         pos_list, position_to_index = scan_ar_tags(pos_list, position_to_index)
-
-        # print('unsorted pos_list')
-        # for pos in pos_list: print(pos_dict[pos])
         
         pos_list.sort(key=lambda triple: triple[1]) # sort by y-value instead of x-value since that corresponds to location in base_frame
         index_to_position = {i:pos_list[i] for i in range(len(pos_list))} # dictionary of position (x,y,z) -> ar tag index (currently 0 -> 3)
 
-        # print("sorted position list is ")
-        # for pos in pos_list: print(pos_dict[pos])
-        # print("position dict is ", pos_dict)
-
         initial_value_order = []
-       
-        # for pos in pos_list:
-        #     index_to_position[len(initial_value_order)] = pos
-        #     initial_value_order.append(position_to_index[pos])
-        # print(initial_value_order)
-
-        # color_to_ar = {initial_color_id : ar_id for initial_color_id, ar_id in zip(color_order, initial_value_order)}
-        # color_to_ar[temp_ar_tag_index] = temp_ar_tag_index
 
         # TODO: this should be done before/during sweep, no reason to do it after
         if sorting_algorithm != merge_sort:
@@ -392,7 +359,7 @@ def main():
         input('Take Picture? Press [ Enter ]')
 
         capture_image(save_path)
-        color_order = get_color_order(save_path)
+        color_order = get_color_order(save_path) #[0, 2, 1, 3] 
 
         print("COLOR_ORDER:", color_order)
         
@@ -431,6 +398,10 @@ def main():
                     print('Move to next block - Press [ Enter ]')
                     print(f'picking up from {entry.start}')
                     print("index to position dict is ", index_to_position)
+
+                    if not flag:
+                        linear_trajectory_move(entry.start, index_to_position[entry.start][0], index_to_position[entry.start][1], .3)
+                        rospy.sleep(1)
 
                     # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], 0, 2)
                     # move(request, compute_ik, index_to_position[entry.start][0], index_to_position[entry.start][1], -.15, 1) # 1 means close

@@ -147,8 +147,9 @@ def get_color_order(image_path):
 
         while len(positions) != color_counts[color]:
 
-            # assert time.time() - start_time < MAX_TIME, \
-            #     f"Exceeded maximum time allowance of {MAX_TIME} seconds. Giving up!"
+            if time.time() - start_time > MAX_TIME and len(positions) > color_counts[color]:
+                print(f"Exceeded maximum time allowance of {MAX_TIME} seconds. Giving up and returning best guesses for {color}")
+                break
 
             if len(positions) < color_counts[color]: # increase tolerance
                 tolerance += np.array([1, 0, 0])
